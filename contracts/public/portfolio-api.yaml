@@ -1,0 +1,1185 @@
+---
+openapi: 3.0.3
+info:
+  title: Portfolio API
+  description: API для управления портфелями пользователей
+  version: 1.0.0
+  contact:
+    name: FuncFund
+servers:
+- url: http://localhost:8080
+  description: Local development
+paths:
+  "/api/v1/portfolios/{id}":
+    get:
+      summary: Получить портфель пользователя
+      description: Возвращает портфель пользователя по его ID
+      operationId: getPortfolio
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: ID пользователя
+        schema:
+          type: integer
+          format: int64
+          example: 12345
+      responses:
+        '200':
+          description: Портфель найден
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PortfolioDto"
+        '404':
+          description: Портфель не найден
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Portfolios
+    patch:
+      summary: Обновить портфель пользователя
+      description: Применяет патчи к портфелю пользователя
+      operationId: patchPortfolio
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: ID пользователя
+        schema:
+          type: integer
+          format: int64
+          example: 12345
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/PatchPortfolioRequest"
+            example:
+              patches:
+              - operationType: UPSERT
+                assetType: STOCK
+                body: '{"ticker": "AAPL", "amount": 100}'
+              - operationType: DELETE
+                assetType: CURRENCY
+                body: '{"code": "USD"}'
+              timestamp: '2024-01-15T10:30:00'
+      responses:
+        '200':
+          description: Портфель успешно обновлен
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PortfolioDto"
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '404':
+          description: Портфель не найден
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Portfolios
+  "/api/v1/portfolios/{id}/history":
+    get:
+      summary: Получить историю стоимости портфеля
+      description: Возвращает агрегированную историю снапшотов портфеля за выбранный
+        период
+      operationId: getPortfolioHistory
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: ID пользователя
+        schema:
+          type: integer
+          format: int64
+          example: 12345
+      - name: period
+        in: query
+        required: true
+        description: Период агрегации
+        schema:
+          "$ref": "#/components/schemas/PortfolioHistoryPeriod"
+      - name: currency
+        in: query
+        required: false
+        description: 'Валюта ответа (точки и summary). Если не передана — users.current_currency.
+
+'
+        schema:
+          type: string
+          enum:
+          - RUB
+          - USD
+          - EUR
+          example: USD
+      responses:
+        '200':
+          description: История портфеля
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PortfolioHistoryResponse"
+        '401':
+          description: Пользователь не аутентифицирован
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Требуется Premium-подписка
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '404':
+          description: Портфель не найден
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Portfolios
+  "/api/v1/portfolios/imports/assets":
+    post:
+      summary: Импортировать активы в портфель текущего пользователя
+      description: Импортирует срез активов пользователя, определяя пользователя по
+        JWT
+      operationId: importMyPortfolioAssets
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              "$ref": "#/components/schemas/ImportPortfolioAssetsRequest"
+      responses:
+        '200':
+          description: Активы успешно импортированы
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ImportPortfolioAssetsResponse"
+        '400':
+          description: Некорректный формат импорта или содержимое отчета
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Пользователь не аутентифицирован
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Portfolios
+  "/api/v1/portfolios/imports/sources":
+    get:
+      summary: Каталог источников импорта и ручного ввода
+      description: |
+        Возвращает presentation-каталог каналов данных (имя, статус поддержки, логотип).
+        Клиент использует его для экрана Import и резолва метаданных по `source` на позициях.
+      operationId: listImportSources
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Каталог источников
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  "$ref": "#/components/schemas/ImportSourceDescriptor"
+        '401':
+          description: Пользователь не аутентифицирован
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Portfolios
+  "/api/v1/portfolios/integrations/tinkoff":
+    put:
+      summary: Подключить Т-Инвестиции (API-токен)
+      description: Сохраняет read-only токен, проверяет его через GetAccounts и возвращает
+        список счетов
+      operationId: connectTinkoffIntegration
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/TinkoffConnectRequest"
+      responses:
+        '200':
+          description: Интеграция подключена
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/TinkoffConnectResponse"
+        '400':
+          description: Некорректный токен или нет счетов
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Не аутентифицирован или токен брокера отклонён
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - TinkoffIntegrations
+    get:
+      summary: Статус интеграции Т-Инвестиции
+      operationId: getTinkoffIntegration
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Статус подключения
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/TinkoffIntegrationStatus"
+        '401':
+          description: Пользователь не аутентифицирован
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - TinkoffIntegrations
+    patch:
+      summary: Обновить выбранные счета Т-Инвестиций
+      operationId: updateTinkoffIntegrationAccounts
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/TinkoffUpdateAccountsRequest"
+      responses:
+        '200':
+          description: Счета обновлены
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/TinkoffIntegrationStatus"
+        '404':
+          description: Интеграция не подключена
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - TinkoffIntegrations
+    delete:
+      summary: Отключить Т-Инвестиции
+      description: Удаляет сохранённый токен и опционально позиции source=tinkoff
+      operationId: disconnectTinkoffIntegration
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: wipePositions
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+      responses:
+        '200':
+          description: Интеграция отключена
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/TinkoffDisconnectResponse"
+        '401':
+          description: Пользователь не аутентифицирован
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - TinkoffIntegrations
+  "/api/v1/portfolios/integrations/tinkoff/sync":
+    post:
+      summary: Синхронизировать портфель из Т-Инвестиций
+      operationId: syncTinkoffIntegration
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Синхронизация выполнена
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/TinkoffSyncResponse"
+        '401':
+          description: Не аутентифицирован или токен брокера недействителен
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '404':
+          description: Интеграция не подключена
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - TinkoffIntegrations
+  "/api/v1/portfolios":
+    get:
+      summary: Получить портфели пользователей
+      description: Возвращает список портфелей для указанных пользователей
+      operationId: getPortfolios
+      parameters:
+      - name: userIds
+        in: query
+        required: true
+        description: Список ID пользователей
+        style: form
+        explode: false
+        schema:
+          type: array
+          items:
+            type: integer
+            format: int64
+          example:
+          - 12345
+          - 67890
+          - 11111
+      responses:
+        '200':
+          description: Список портфелей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  "$ref": "#/components/schemas/PortfolioDto"
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Portfolios
+tags:
+- name: Portfolios
+  description: Операции с портфелями пользователей
+- name: TinkoffIntegrations
+  description: Подключение и синхронизация Т-Инвестиций (API-токен)
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    PortfolioDto:
+      type: object
+      description: Портфель пользователя
+      required:
+      - id
+      - userId
+      - deposits
+      - currencies
+      - etfs
+      - stocks
+      - metals
+      - federalLoanBonds
+      - bonds
+      - cryptocurrencies
+      - lastChangeAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID портфеля
+          example: 1
+        userId:
+          type: integer
+          format: int64
+          description: ID пользователя
+          example: 12345
+        deposits:
+          type: object
+          additionalProperties:
+            "$ref": "#/components/schemas/Deposit"
+          description: Депозиты
+        currencies:
+          type: object
+          additionalProperties:
+            "$ref": "#/components/schemas/Currency"
+          description: Валюты
+        etfs:
+          type: object
+          additionalProperties:
+            "$ref": "#/components/schemas/ETF"
+          description: ETF
+        stocks:
+          type: object
+          additionalProperties:
+            "$ref": "#/components/schemas/Stock"
+          description: Акции
+        metals:
+          type: object
+          additionalProperties:
+            "$ref": "#/components/schemas/Metal"
+          description: Драгоценные металлы
+        federalLoanBonds:
+          type: object
+          additionalProperties:
+            "$ref": "#/components/schemas/FederalLoanBond"
+          description: ОФЗ
+        bonds:
+          type: object
+          additionalProperties:
+            "$ref": "#/components/schemas/Bond"
+          description: Облигации
+        cryptocurrencies:
+          type: object
+          additionalProperties:
+            "$ref": "#/components/schemas/Cryptocurrency"
+          description: Криптовалюты
+        lastChangeAt:
+          type: string
+          format: date-time
+          description: Время последнего изменения
+          example: '2024-01-15T10:30:00'
+        valuationCurrency:
+          type: string
+          description: Базовая валюта оценки портфеля (users.current_currency)
+          example: RUB
+    PatchPortfolioRequest:
+      type: object
+      description: Запрос на обновление портфеля
+      required:
+      - patches
+      - timestamp
+      properties:
+        patches:
+          type: array
+          description: Список патчей для применения
+          items:
+            "$ref": "#/components/schemas/PatchPortfolioDto"
+        timestamp:
+          type: string
+          format: date-time
+          description: Временная метка операции
+          example: '2024-01-15T10:30:00'
+    PatchPortfolioDto:
+      type: object
+      description: Патч для портфеля
+      required:
+      - operationType
+      - assetType
+      - body
+      properties:
+        operationType:
+          "$ref": "#/components/schemas/PatchOperationType"
+        assetType:
+          "$ref": "#/components/schemas/AssetType"
+        body:
+          type: string
+          description: JSON строка с данными актива
+          example: '{"ticker": "AAPL", "amount": 100}'
+    PatchOperationType:
+      type: string
+      enum:
+      - DELETE
+      - UPSERT
+      description: Тип операции патча
+    AssetType:
+      type: string
+      enum:
+      - BOND
+      - CRYPTO_CURRENCY
+      - CURRENCY
+      - DEPOSIT
+      - ETF
+      - FEDERAL_LOAN_BOND
+      - METAL
+      - STOCK
+      description: Тип актива
+    AssetLot:
+      type: object
+      description: Доля актива по источнику (брокер / manual)
+      required:
+      - source
+      - amount
+      properties:
+        source:
+          type: string
+          description: Идентификатор канала (sber, tinkoff, manual, …)
+          example: tinkoff
+        amount:
+          type: number
+          format: double
+          description: Количество в доле (для акций/ETF — целое в JSON)
+          example: 18
+    Stock:
+      type: object
+      description: Акция
+      required:
+      - ticker
+      - amount
+      properties:
+        ticker:
+          type: string
+          description: Тикер акции
+          example: AAPL
+        amount:
+          type: integer
+          format: int64
+          description: Суммарное количество акций по всем источникам
+          example: 100
+        source:
+          type: string
+          description: Legacy/единственный источник; при нескольких lots обычно null
+          example: sber
+        lots:
+          type: array
+          description: Доли по брокерам; amount на корне = сумма lots
+          items:
+            "$ref": "#/components/schemas/AssetLot"
+    Currency:
+      type: object
+      description: Валюта
+      required:
+      - code
+      - amount
+      properties:
+        code:
+          type: string
+          description: Код валюты
+          example: USD
+        amount:
+          type: number
+          format: double
+          description: Суммарная сумма по всем источникам
+          example: 1000.5
+        source:
+          type: string
+          description: Legacy/единственный источник; при нескольких lots обычно null
+          example: sber
+        lots:
+          type: array
+          description: Доли по брокерам; amount на корне = сумма lots
+          items:
+            "$ref": "#/components/schemas/AssetLot"
+    ETF:
+      type: object
+      description: Биржевой инвестиционный фонд
+      required:
+      - ticker
+      - amount
+      properties:
+        ticker:
+          type: string
+          description: Тикер ETF
+          example: SPY
+        amount:
+          type: integer
+          format: int64
+          description: Суммарное количество ETF по всем источникам
+          example: 50
+        source:
+          type: string
+          description: Legacy/единственный источник; при нескольких lots обычно null
+          example: sber
+        lots:
+          type: array
+          description: Доли по брокерам; amount на корне = сумма lots
+          items:
+            "$ref": "#/components/schemas/AssetLot"
+    Metal:
+      type: object
+      description: Драгоценный металл
+      required:
+      - id
+      - type
+      - weight
+      - name
+      - form
+      - value
+      - currency
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          description: Уникальный идентификатор металла
+          example: GOLD_001
+        type:
+          type: string
+          description: Тип металла
+          example: GOLD
+        weight:
+          type: number
+          format: double
+          description: Вес металла в граммах
+          example: 31.1
+        name:
+          type: string
+          description: Название металла
+          example: Золото инвестиционное
+        form:
+          type: string
+          description: Форма металла
+          example: слиток
+        value:
+          type: number
+          format: double
+          description: Стоимость металла
+          example: 250000.0
+        currency:
+          type: string
+          description: Валюта стоимости
+          example: RUB
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата создания записи
+          example: '2024-01-15T10:30:00'
+        updatedAt:
+          type: string
+          format: date-time
+          description: Дата последнего обновления
+          example: '2024-01-15T10:30:00'
+        source:
+          type: string
+          description: Идентификатор канала данных (sber, manual, …)
+          example: manual
+    Bond:
+      type: object
+      description: Облигация
+      required:
+      - ticker
+      - amount
+      properties:
+        ticker:
+          type: string
+          description: Тикер облигации
+          example: RU000A0ZZZ00
+        amount:
+          type: integer
+          format: int64
+          description: Суммарное количество облигаций по всем источникам
+          example: 1000
+        source:
+          type: string
+          description: Legacy/единственный источник; при нескольких lots обычно null
+          example: sber
+        lots:
+          type: array
+          description: Доли по брокерам; amount на корне = сумма lots
+          items:
+            "$ref": "#/components/schemas/AssetLot"
+    FederalLoanBond:
+      type: object
+      description: ОФЗ (Облигация федерального займа)
+      required:
+      - ticker
+      - amount
+      properties:
+        ticker:
+          type: string
+          description: Тикер ОФЗ
+          example: SU26238RMFS6
+        amount:
+          type: integer
+          format: int64
+          description: Суммарное количество ОФЗ по всем источникам
+          example: 500
+        source:
+          type: string
+          description: Legacy/единственный источник; при нескольких lots обычно null
+          example: sber
+        lots:
+          type: array
+          description: Доли по брокерам; amount на корне = сумма lots
+          items:
+            "$ref": "#/components/schemas/AssetLot"
+    Cryptocurrency:
+      type: object
+      description: Криптовалюта
+      required:
+      - ticker
+      - amount
+      properties:
+        ticker:
+          type: string
+          description: Тикер криптовалюты
+          example: BTC
+        amount:
+          type: number
+          format: double
+          description: Количество криптовалюты
+          example: 1
+        source:
+          type: string
+          description: Идентификатор канала данных (sber, manual, …)
+          example: binance
+    Deposit:
+      type: object
+      description: Вклад или кредит
+      required:
+      - id
+      - amount
+      - currency
+      - interestRate
+      - startDate
+      - durationMonths
+      - kind
+      properties:
+        id:
+          type: string
+          description: Уникальный идентификатор вклада или кредита
+          example: SBER_DEPOSIT_001
+        amount:
+          type: number
+          format: double
+          description: Сумма вклада или кредита
+          example: 100000.0
+        currency:
+          type: string
+          description: Валюта
+          example: RUB
+        interestRate:
+          type: number
+          format: double
+          description: Процентная ставка
+          example: 8.5
+        startDate:
+          type: string
+          format: date-time
+          description: Дата открытия
+          example: '2024-01-15T00:00:00Z'
+        durationMonths:
+          type: integer
+          format: int32
+          description: Срок в месяцах
+          example: 12
+        kind:
+          type: string
+          description: "`deposit` — актив, `credit` — обязательство (минус в оценке
+            портфеля).\n"
+          enum:
+          - deposit
+          - credit
+          example: deposit
+        source:
+          type: string
+          description: Идентификатор канала данных (sberbank, manual, …)
+          example: sberbank
+        name:
+          type: string
+          description: Человекочитаемое название
+          example: Вклад в Альфе
+    ImportSourceStatus:
+      type: string
+      description: Статус поддержки источника в продукте
+      enum:
+      - available
+      - soon
+      - watch
+    ImportSourceKind:
+      type: string
+      description: Тип канала данных
+      enum:
+      - import
+      - manual
+      - watch
+      - api
+    TinkoffConnectRequest:
+      type: object
+      required:
+      - token
+      properties:
+        token:
+          type: string
+          description: Read-only API-токен Т-Инвестиций
+        accountIds:
+          type: array
+          description: Опциональный список счетов для sync; по умолчанию все открытые
+          items:
+            type: string
+    TinkoffAccountDto:
+      type: object
+      required:
+      - id
+      - name
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+    TinkoffConnectResponse:
+      type: object
+      required:
+      - connected
+      - accounts
+      - selectedAccountIds
+      properties:
+        connected:
+          type: boolean
+        accounts:
+          type: array
+          items:
+            "$ref": "#/components/schemas/TinkoffAccountDto"
+        selectedAccountIds:
+          type: array
+          items:
+            type: string
+    TinkoffIntegrationStatus:
+      type: object
+      required:
+      - connected
+      properties:
+        connected:
+          type: boolean
+        accounts:
+          type: array
+          items:
+            "$ref": "#/components/schemas/TinkoffAccountDto"
+        selectedAccountIds:
+          type: array
+          items:
+            type: string
+        lastSyncedAt:
+          type: string
+          format: date-time
+        lastSyncStatus:
+          type: string
+          description: ok | auth_failed | error
+    TinkoffUpdateAccountsRequest:
+      type: object
+      required:
+      - accountIds
+      properties:
+        accountIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+    TinkoffSyncResponse:
+      type: object
+      required:
+      - syncedAssetsCount
+      - syncedAt
+      - portfolio
+      properties:
+        syncedAssetsCount:
+          type: integer
+          format: int32
+        syncedAt:
+          type: string
+          format: date-time
+        portfolio:
+          "$ref": "#/components/schemas/PortfolioDto"
+    TinkoffDisconnectResponse:
+      type: object
+      required:
+      - disconnected
+      - wipedPositions
+      properties:
+        disconnected:
+          type: boolean
+          description: Токен и запись интеграции удалены
+        wipedPositions:
+          type: boolean
+          description: Были ли удалены позиции source=tinkoff
+    ImportSourceDescriptor:
+      type: object
+      description: Presentation-дескриптор канала данных для UI
+      required:
+      - id
+      - name
+      - shortLabel
+      - description
+      - status
+      - brandColor
+      - kind
+      - acceptedExtensions
+      - aliases
+      properties:
+        id:
+          type: string
+          description: Стабильный идентификатор канала
+          example: sber
+        name:
+          type: string
+          description: Отображаемое имя
+          example: Сбер
+        shortLabel:
+          type: string
+          description: Короткий лейбл для fallback без логотипа
+          example: СБ
+        description:
+          type: string
+          description: Подзаголовок / формат
+          example: HTML-отчёт брокера
+        status:
+          "$ref": "#/components/schemas/ImportSourceStatus"
+        brandColor:
+          type: string
+          description: HEX цвет бренда
+          example: "#21A038"
+        logoUrl:
+          type: string
+          description: |
+            Относительный путь к логотипу от API gateway base
+            (например `/portfolios/imports/sources/logos/sber.png`)
+          example: "/portfolios/imports/sources/logos/sber.png"
+        acceptedExtensions:
+          type: array
+          description: Допустимые расширения файла для импорта
+          items:
+            type: string
+          example:
+          - ".html"
+          - ".htm"
+        kind:
+          "$ref": "#/components/schemas/ImportSourceKind"
+        aliases:
+          type: array
+          description: Альтернативные имена для резолва legacy `source` на позициях
+          items:
+            type: string
+          example:
+          - Сбер
+          - Sber
+        lastImportedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Время последнего импорта/синка этого источника текущим пользователем.
+            null — пользователь ещё не подключал источник.
+    PortfolioImportMode:
+      type: string
+      description: Режим применения импортированных данных
+      enum:
+      - REPLACE
+    ImportPortfolioAssetsRequest:
+      type: object
+      description: Запрос на импорт активов портфеля из внешнего отчета
+      required:
+      - file
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Файл отчета для импорта
+        mode:
+          "$ref": "#/components/schemas/PortfolioImportMode"
+        sourceName:
+          type: string
+          description: Опциональное имя источника/файла для аудита
+          example: S20HVMN_17032026.HTML
+    ImportPortfolioAssetsResponse:
+      type: object
+      description: Результат импорта активов в портфель
+      required:
+      - mode
+      - importedAssetsCount
+      - replacedAssetTypes
+      - importedAt
+      - portfolio
+      properties:
+        mode:
+          "$ref": "#/components/schemas/PortfolioImportMode"
+        importedAssetsCount:
+          type: integer
+          format: int32
+          description: Количество импортированных позиций активов
+          example: 25
+        replacedAssetTypes:
+          type: array
+          description: Типы активов, которые были предварительно очищены перед upsert
+          items:
+            "$ref": "#/components/schemas/AssetType"
+        importedAt:
+          type: string
+          format: date-time
+          description: Время завершения импорта
+          example: '2026-03-24T10:30:00Z'
+        portfolio:
+          "$ref": "#/components/schemas/PortfolioDto"
+    PortfolioHistoryPeriod:
+      type: string
+      enum:
+      - 1D
+      - 1W
+      - 1M
+      - 3M
+      - YTD
+      description: |
+        Период истории портфеля:
+        1D — сегодня, 1W — 1 неделя, 1M — 1 месяц, 3M — 3 месяца, YTD — с начала года.
+    PortfolioHistoryBucket:
+      type: string
+      enum:
+      - 1h
+      - 1d
+      description: Размер временного бакета агрегации
+    PortfolioHistoryPoint:
+      type: object
+      description: Точка агрегированной истории портфеля
+      required:
+      - at
+      - totalValue
+      - byClass
+      properties:
+        at:
+          type: string
+          format: date-time
+          description: Время бакета
+          example: '2026-06-19T10:00:00Z'
+        totalValue:
+          type: number
+          format: double
+          description: Стоимость портфеля на конец бакета
+          example: 1250000.5
+        byClass:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: Разбивка стоимости по классам активов
+          example:
+            stocks: 500000.0
+            bonds: 250000.0
+        positionsCount:
+          type: integer
+          format: int32
+          description: Количество позиций на конец бакета
+          example: 42
+    PortfolioHistorySummary:
+      type: object
+      description: Сводка по истории портфеля за период
+      required:
+      - pointsCount
+      properties:
+        startValue:
+          type: number
+          format: double
+          description: Стоимость в начале периода
+          example: 1200000.0
+        endValue:
+          type: number
+          format: double
+          description: Стоимость в конце периода
+          example: 1250000.5
+        changeAbs:
+          type: number
+          format: double
+          description: Абсолютное изменение стоимости
+          example: 50000.5
+        changePct:
+          type: number
+          format: double
+          description: Относительное изменение стоимости в процентах
+          example: 4.17
+        maxValue:
+          type: number
+          format: double
+          description: Максимальная стоимость за период
+          example: 1260000.0
+        minValue:
+          type: number
+          format: double
+          description: Минимальная стоимость за период
+          example: 1180000.0
+        pointsCount:
+          type: integer
+          format: int32
+          description: Количество точек в ответе
+          example: 30
+    PortfolioHistoryResponse:
+      type: object
+      description: История стоимости портфеля
+      required:
+      - userId
+      - period
+      - currency
+      - from
+      - to
+      - bucket
+      - points
+      - summary
+      properties:
+        userId:
+          type: integer
+          format: int64
+          description: ID пользователя
+          example: 12345
+        period:
+          "$ref": "#/components/schemas/PortfolioHistoryPeriod"
+        currency:
+          type: string
+          description: Валюта оценки портфеля
+          example: RUB
+        from:
+          type: string
+          format: date-time
+          description: Начало периода
+          example: '2026-05-19T00:00:00Z'
+        to:
+          type: string
+          format: date-time
+          description: Конец периода
+          example: '2026-06-19T12:00:00Z'
+        bucket:
+          "$ref": "#/components/schemas/PortfolioHistoryBucket"
+        points:
+          type: array
+          description: Агрегированные точки истории
+          items:
+            "$ref": "#/components/schemas/PortfolioHistoryPoint"
+        summary:
+          "$ref": "#/components/schemas/PortfolioHistorySummary"
+    Error:
+      type: object
+      description: Ошибка API
+      properties:
+        message:
+          type: string
+          description: Сообщение об ошибке
+          example: Портфель не найден
+        code:
+          type: string
+          description: Код ошибки
+          example: PORTFOLIO_NOT_FOUND
+        timestamp:
+          type: string
+          format: date-time
+          description: Время возникновения ошибки
+          example: '2024-01-15T10:30:00'

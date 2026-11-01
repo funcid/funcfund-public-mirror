@@ -1,0 +1,587 @@
+---
+openapi: 3.0.3
+info:
+  title: User Service API
+  description: API для аутентификации и управления пользователями
+  version: 1.0.0
+  contact:
+    name: FuncFund
+servers:
+- url: http://localhost:8080
+  description: Local development
+paths:
+  "/api/v1/auth/register":
+    post:
+      summary: Регистрация пользователя
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/RegistrationRequest"
+      responses:
+        '201':
+          description: Пользователь создан
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UserDto"
+        '400':
+          description: Данные некорректны
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '409':
+          description: Пользователь уже существует (code USER_ALREADY_EXISTS)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - User
+  "/api/v1/auth/login":
+    post:
+      summary: Аутентификация пользователя
+      operationId: authenticate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/LoginRequest"
+      responses:
+        '200':
+          description: Успешная аутентификация
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/AuthDto"
+        '401':
+          description: Неверный email или пароль (code INVALID_CREDENTIALS)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Email не подтверждён или аккаунт заблокирован (EMAIL_NOT_VERIFIED,
+            USER_BLOCKED)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - User
+  "/api/v1/auth/refresh":
+    post:
+      summary: Обновление access token по refresh token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/RefreshTokenRequest"
+      responses:
+        '200':
+          description: Токены обновлены
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/AuthDto"
+        '401':
+          description: Невалидный или просроченный refresh (REFRESH_TOKEN_INVALID,
+            REFRESH_TOKEN_EXPIRED)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Пользователь не активен (USER_NOT_ACTIVE)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - User
+  "/api/v1/auth/verify-email":
+    post:
+      summary: Подтверждение email по токену
+      operationId: verifyEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/VerifyEmailRequest"
+      responses:
+        '200':
+          description: Email подтвержден
+      tags:
+      - User
+  "/api/v1/auth/resend-verification":
+    post:
+      summary: Повторная отправка письма подтверждения
+      operationId: resendVerification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ResendVerificationRequest"
+      responses:
+        '200':
+          description: Письмо отправлено
+      tags:
+      - User
+  "/api/v1/auth/forgot-password":
+    post:
+      summary: Запрос ссылки на сброс пароля
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        '200':
+          description: Запрос принят
+      tags:
+      - User
+  "/api/v1/auth/reset-password":
+    post:
+      summary: Сброс пароля по токену
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ResetPasswordRequest"
+      responses:
+        '200':
+          description: Пароль обновлен
+      tags:
+      - User
+  "/api/v1/auth/providers":
+    get:
+      summary: Доступные способы социальной авторизации
+      operationId: listAuthProviders
+      parameters:
+      - name: origin
+        in: query
+        required: false
+        description: Origin клиента (например http://localhost:3000) для выбора redirectUri
+        schema:
+          type: string
+      - name: publicBaseUrl
+        in: query
+        required: false
+        description: Публичный базовый URL API глазами клиента (например http://localhost:3000/gateway)
+          для абсолютных iconUrl
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Список включённых OAuth-провайдеров
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/AuthProvidersResponse"
+      tags:
+      - User
+  "/api/v1/auth/oauth/yandex":
+    post:
+      summary: Вход или регистрация через Яндекс OAuth
+      operationId: authenticateWithYandex
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/YandexOAuthRequest"
+      responses:
+        '200':
+          description: Успешная аутентификация
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/AuthDto"
+        '400':
+          description: Некорректный redirectUri или code (BAD_REQUEST)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Ошибка обмена кода или профиля Яндекса (OAUTH_FAILED)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Аккаунт заблокирован (USER_BLOCKED)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - User
+  "/api/v1/auth/oauth/vk":
+    post:
+      summary: Вход или регистрация через VK ID
+      operationId: authenticateWithVk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/VkOAuthRequest"
+      responses:
+        '200':
+          description: Успешная аутентификация
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/AuthDto"
+        '400':
+          description: Некорректный redirectUri или code (BAD_REQUEST)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Ошибка обмена кода или профиля VK (OAUTH_FAILED)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Аккаунт заблокирован (USER_BLOCKED)
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - User
+  "/api/v1/users/me":
+    get:
+      summary: Получить текущего пользователя
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: Профиль пользователя
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UserDto"
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - User
+    patch:
+      summary: Обновить настройки текущего пользователя
+      operationId: updateCurrentUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/UpdateUserRequest"
+      responses:
+        '200':
+          description: Профиль обновлён
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UserDto"
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - User
+components:
+  schemas:
+    RegistrationRequest:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: mypassword
+    LoginRequest:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: mypassword
+    UserDto:
+      type: object
+      required:
+      - id
+      - email
+      - registeredAt
+      - currentCurrency
+      - balanceRefreshFrequency
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        registeredAt:
+          type: string
+          format: date-time
+          example: '2026-01-15T12:00:00Z'
+        currentCurrency:
+          type: string
+          enum:
+          - RUB
+          - USD
+          - EUR
+          example: RUB
+        preferredPeriod:
+          type: string
+          nullable: true
+          enum:
+          - 1D
+          - 1W
+          - 1M
+          - 3M
+          - YTD
+          example: 1M
+        balanceRefreshFrequency:
+          type: string
+          enum:
+          - INSTANT
+          - S1
+          - S10
+          - S30
+          description: |
+            Частота обновления live-баланса (PWA).
+            INSTANT — сразу, S1/S10/S30 — не чаще чем раз в 1/10/30 секунд.
+          example: INSTANT
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL аватара (заполняется при OAuth-авторизации)
+          example: https://avatars.yandex.net/get-yapic/abc/islands-200
+    UpdateUserRequest:
+      type: object
+      properties:
+        currentCurrency:
+          type: string
+          enum:
+          - RUB
+          - USD
+          - EUR
+          example: USD
+        preferredPeriod:
+          type: string
+          nullable: true
+          enum:
+          - 1D
+          - 1W
+          - 1M
+          - 3M
+          - YTD
+          example: 3M
+        balanceRefreshFrequency:
+          type: string
+          enum:
+          - INSTANT
+          - S1
+          - S10
+          - S30
+          example: S1
+    AuthDto:
+      type: object
+      required:
+      - accessToken
+      - refreshToken
+      - tokenType
+      - expiresIn
+      properties:
+        accessToken:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refreshToken:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          format: int64
+          example: 900
+    RefreshTokenRequest:
+      type: object
+      required:
+      - refreshToken
+      properties:
+        refreshToken:
+          type: string
+    VerifyEmailRequest:
+      type: object
+      required:
+      - token
+      properties:
+        token:
+          type: string
+    ResendVerificationRequest:
+      type: object
+      required:
+      - email
+      properties:
+        email:
+          type: string
+          format: email
+    ForgotPasswordRequest:
+      type: object
+      required:
+      - email
+      properties:
+        email:
+          type: string
+          format: email
+    ResetPasswordRequest:
+      type: object
+      required:
+      - token
+      - newPassword
+      properties:
+        token:
+          type: string
+        newPassword:
+          type: string
+          format: password
+    AuthProviderDto:
+      type: object
+      required:
+      - id
+      - label
+      - iconUrl
+      - clientId
+      - authorizeUrl
+      - redirectUri
+      properties:
+        id:
+          type: string
+          description: Идентификатор провайдера (yandex, vk)
+          example: yandex
+        label:
+          type: string
+          description: Текст кнопки
+          example: Войти с Яндекс ID
+        iconUrl:
+          type: string
+          description: Абсолютный или клиентский URL иконки провайдера
+        clientId:
+          type: string
+          description: OAuth client_id для authorize
+        authorizeUrl:
+          type: string
+          description: Базовый URL authorize endpoint провайдера
+        redirectUri:
+          type: string
+          description: Redirect URI, который клиент должен передать в authorize и
+            в обмен кода
+    AuthProvidersResponse:
+      type: object
+      required:
+      - providers
+      properties:
+        providers:
+          type: array
+          items:
+            "$ref": "#/components/schemas/AuthProviderDto"
+    YandexOAuthRequest:
+      type: object
+      required:
+      - code
+      - redirectUri
+      properties:
+        code:
+          type: string
+          description: Authorization code от Яндекс OAuth
+        redirectUri:
+          type: string
+          description: Redirect URI, использованный при authorize (должен совпадать
+            с whitelist)
+    VkOAuthRequest:
+      type: object
+      required:
+      - code
+      - redirectUri
+      - codeVerifier
+      - deviceId
+      properties:
+        code:
+          type: string
+          description: Authorization code от VK ID
+        redirectUri:
+          type: string
+          description: Redirect URI, использованный при authorize (должен совпадать
+            с whitelist)
+        codeVerifier:
+          type: string
+          description: PKCE code_verifier, использованный при authorize
+        deviceId:
+          type: string
+          description: device_id из callback VK ID
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Неверные учетные данные
+        code:
+          type: string
+          example: INVALID_CREDENTIALS

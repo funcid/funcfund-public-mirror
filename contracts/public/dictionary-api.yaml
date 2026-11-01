@@ -1,0 +1,319 @@
+---
+openapi: 3.0.3
+info:
+  title: Assets Dictionary API
+  description: API для поиска активов по названию или тикеру
+  version: 1.0.0
+  contact:
+    name: FuncFund
+servers:
+- url: http://localhost:8080
+  description: Local development
+paths:
+  "/api/v1/assets/search":
+    get:
+      summary: Поиск активов
+      description: Поиск активов по названию или тикеру
+      operationId: searchAssets
+      parameters:
+      - name: query
+        in: query
+        required: true
+        description: Поисковый запрос (название или тикер актива)
+        schema:
+          type: string
+          example: Apple
+      - name: type
+        in: query
+        required: false
+        description: Тип актива для фильтрации
+        schema:
+          "$ref": "#/components/schemas/AssetType"
+      - name: limit
+        in: query
+        required: false
+        description: Максимальное количество результатов
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+      responses:
+        '200':
+          description: Результаты поиска
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SearchResult"
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Assets
+  "/api/v1/assets/lookup":
+    get:
+      summary: Точный lookup активов по тикерам
+      description: Возвращает активы по списку тикеров без полнотекстового скоринга
+      operationId: lookupAssets
+      parameters:
+      - name: ids
+        in: query
+        required: true
+        description: Тикеры через запятую
+        schema:
+          type: string
+          example: SBER,GAZP
+      responses:
+        '200':
+          description: Найденные активы
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SearchResult"
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Assets
+  "/api/v1/assets":
+    get:
+      summary: Получить список активов
+      description: Возвращает список активов с возможностью фильтрации по типу
+      operationId: getAssets
+      parameters:
+      - name: type
+        in: query
+        required: false
+        description: Тип актива для фильтрации
+        schema:
+          "$ref": "#/components/schemas/AssetType"
+      - name: limit
+        in: query
+        required: false
+        description: Максимальное количество результатов
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        description: Смещение для пагинации
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      responses:
+        '200':
+          description: Список активов
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/AssetsListResponse"
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Assets
+  "/api/v1/currencies":
+    get:
+      summary: Список валют с курсами
+      description: Возвращает каталог валют и их курсы к рублю
+      operationId: listCurrencies
+      responses:
+        '200':
+          description: Список валют
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/CurrencyListResponse"
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Currencies
+  "/api/v1/currencies/rates":
+    get:
+      summary: Получить последние курсы валют
+      description: Возвращает актуальные курсы валют
+      operationId: getLatestCurrencyRates
+      parameters:
+      - name: base
+        in: query
+        required: true
+        description: Базовая валюта
+        schema:
+          type: string
+          example: USD
+      responses:
+        '200':
+          description: Последние курсы валют
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/CurrencyRates"
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Currencies
+tags:
+- name: Assets
+  description: Операции с активами
+- name: Currencies
+  description: Операции с валютами
+components:
+  schemas:
+    Asset:
+      type: object
+      description: Актив
+      required:
+      - id
+      - type
+      - value
+      properties:
+        id:
+          type: string
+          description: Уникальный идентификатор актива (тикер)
+          example: AAPL
+        type:
+          "$ref": "#/components/schemas/AssetType"
+        value:
+          type: string
+          description: Цена актива
+          example: '2.71'
+        displayName:
+          type: string
+          description: Человекочитаемое название актива
+          example: Apple
+    AssetType:
+      type: string
+      enum:
+      - BOND
+      - CRYPTO_CURRENCY
+      - CURRENCY
+      - DEPOSIT
+      - ETF
+      - FEDERAL_LOAN_BOND
+      - METAL
+      - STOCK
+      description: Тип актива
+    SearchResult:
+      type: object
+      description: Результат поиска активов
+      required:
+      - assets
+      - total
+      properties:
+        assets:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Asset"
+          description: Найденные активы
+        total:
+          type: integer
+          format: int32
+          description: Общее количество найденных активов
+          example: 5
+        query:
+          type: string
+          description: Исходный поисковый запрос
+          example: Apple
+    AssetsListResponse:
+      type: object
+      description: Ответ со списком активов
+      required:
+      - assets
+      - total
+      - limit
+      - offset
+      properties:
+        assets:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Asset"
+          description: Список активов
+        total:
+          type: integer
+          format: int32
+          description: Общее количество активов
+          example: 1000
+        limit:
+          type: integer
+          format: int32
+          description: Максимальное количество результатов в ответе
+          example: 50
+        offset:
+          type: integer
+          format: int32
+          description: Смещение для пагинации
+          example: 0
+    Error:
+      type: object
+      description: Ошибка API
+      properties:
+        message:
+          type: string
+          description: Сообщение об ошибке
+          example: Актив не найден
+        code:
+          type: string
+          description: Код ошибки
+          example: ASSET_NOT_FOUND
+    CurrencyRates:
+      type: object
+      description: Курсы валют
+      required:
+      - base
+      - date
+      - value
+      properties:
+        base:
+          type: string
+          description: Базовая валюта
+          example: USD
+        value:
+          type: string
+          description: Цена валюты
+          example: '2.71'
+    CurrencyListItem:
+      type: object
+      description: Валюта из каталога
+      required:
+      - code
+      - rate
+      properties:
+        code:
+          type: string
+          description: ISO-код валюты
+          example: USD
+        rate:
+          type: string
+          description: Курс к рублю
+          example: '92.5'
+    CurrencyListResponse:
+      type: object
+      description: Список валют
+      required:
+      - currencies
+      properties:
+        currencies:
+          type: array
+          items:
+            "$ref": "#/components/schemas/CurrencyListItem"

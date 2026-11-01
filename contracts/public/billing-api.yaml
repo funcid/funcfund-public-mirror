@@ -1,0 +1,240 @@
+---
+openapi: 3.0.3
+info:
+  title: Billing API
+  description: API для подписок и платежей
+  version: 1.0.0
+  contact:
+    name: FuncFund
+servers:
+- url: http://localhost:8080
+  description: Local development
+paths:
+  "/api/v1/billing/plans":
+    get:
+      summary: Получить список тарифов
+      operationId: listPlans
+      responses:
+        '200':
+          description: Список тарифов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  "$ref": "#/components/schemas/PlanDto"
+      tags:
+      - Billing
+  "/api/v1/billing/subscriptions/me":
+    get:
+      summary: Получить активную подписку пользователя
+      operationId: getMySubscription
+      responses:
+        '200':
+          description: Подписка пользователя
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SubscriptionDto"
+        '404':
+          description: Подписка не найдена
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Billing
+  "/api/v1/billing/checkout":
+    post:
+      summary: Создать checkout сессию
+      operationId: createCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CheckoutRequest"
+      responses:
+        '200':
+          description: Сессия создана
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/CheckoutResponse"
+      tags:
+      - Billing
+  "/api/v1/billing/subscriptions/cancel":
+    post:
+      summary: Отменить автопродление подписки
+      operationId: cancelSubscription
+      responses:
+        '204':
+          description: Подписка отменена
+      tags:
+      - Billing
+  "/api/v1/billing/payments":
+    get:
+      summary: Получить историю платежей
+      operationId: listPayments
+      responses:
+        '200':
+          description: История платежей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  "$ref": "#/components/schemas/PaymentDto"
+      tags:
+      - Billing
+  "/api/v1/billing/payments/{paymentId}/sync":
+    post:
+      summary: Синхронизировать статус платежа с ЮKassa и активировать подписку
+      operationId: syncPayment
+      parameters:
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Актуальный статус платежа
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentDto"
+        '404':
+          description: Платёж не найден
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      tags:
+      - Billing
+components:
+  schemas:
+    PlanDto:
+      type: object
+      required:
+      - code
+      - title
+      - amountRub
+      - billingPeriod
+      properties:
+        code:
+          type: string
+          example: premium
+        title:
+          type: string
+          example: Premium
+        amountRub:
+          type: integer
+          format: int64
+          example: 349
+        billingPeriod:
+          type: string
+          example: MONTHLY
+    SubscriptionDto:
+      type: object
+      required:
+      - id
+      - userId
+      - planCode
+      - status
+      - startsAt
+      properties:
+        id:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        planCode:
+          type: string
+          example: premium
+        status:
+          type: string
+          example: active
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+          nullable: true
+        canceledAt:
+          type: string
+          format: date-time
+          nullable: true
+    CheckoutRequest:
+      type: object
+      required:
+      - planCode
+      properties:
+        planCode:
+          type: string
+          example: premium
+    CheckoutResponse:
+      type: object
+      required:
+      - paymentId
+      - status
+      properties:
+        paymentId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          example: pending
+        confirmationToken:
+          type: string
+          nullable: true
+        confirmationUrl:
+          type: string
+          nullable: true
+          description: URL редиректа на оплату ЮKassa
+    PaymentDto:
+      type: object
+      required:
+      - id
+      - amount
+      - currency
+      - status
+      - createdAt
+      properties:
+        id:
+          type: integer
+          format: int64
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+          example: RUB
+        status:
+          type: string
+          example: pending
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    WebhookRequest:
+      type: object
+      properties:
+        event:
+          type: string
+        object:
+          type: object
+          additionalProperties: true
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: string
